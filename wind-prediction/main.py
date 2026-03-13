@@ -32,6 +32,3 @@ def predict_thrips_spread(lat, lon):
 result = predict_thrips_spread(12.9716, 77.5946)
 
 print(result)
-import webbrowser
-
-webbrowser.open("wind_prediction_map.html")
