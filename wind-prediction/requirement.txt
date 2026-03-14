@@ -1,0 +1,5 @@
+requests
+geopy
+fastapi
+uvicorn
+folium
