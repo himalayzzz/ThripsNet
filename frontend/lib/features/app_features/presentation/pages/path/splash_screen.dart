@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../dashboard/dashboard_screen.dart';
 
@@ -28,6 +31,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+
     return Scaffold(
       body: SafeArea(
         child: Container(
@@ -41,6 +46,28 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
           child: Stack(
             children: [
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    PageVoiceButton(
+                      textBuilder: (BuildContext context) {
+                        final AppCopy copy = AppCopy.of(context);
+                        return '${copy.appName}. '
+                            '${copy.aiFarmAssistant}. '
+                            '${copy.splashHeadline}. '
+                            '${copy.splashSubtitle}. '
+                            '${copy.splashFeature}. '
+                            '${copy.loading}. '
+                            '${copy.startNow}.';
+                      },
+                    ),
+                    LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+                  ],
+                ),
+              ),
               Positioned(
                 top: -50,
                 right: -20,
@@ -72,7 +99,10 @@ class _SplashScreenState extends State<SplashScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0x1D2E7B5F),
                         borderRadius: BorderRadius.circular(999),
@@ -88,31 +118,35 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0x2958C98A),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: const Text(
-                        'AI FARM ASSISTANT',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      child: Text(
+                        copy.aiFarmAssistant,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'STOP, BREATHE,\nSCAN SMART',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontSize: 36,
-                            height: 1.05,
-                          ),
+                      copy.splashHeadline,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontSize: 36, height: 1.05),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'ThripsNet helps you detect disease signs early and act faster with confidence.',
+                      copy.splashSubtitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textMuted,
-                          ),
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                     const SizedBox(height: 18),
                     Container(
@@ -123,14 +157,17 @@ class _SplashScreenState extends State<SplashScreen> {
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: AppColors.borderSoft),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(Icons.auto_awesome_rounded, color: AppColors.mintDeep),
-                          SizedBox(width: 8),
+                          const Icon(
+                            Icons.auto_awesome_rounded,
+                            color: AppColors.mintDeep,
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'AI-powered disease alerts, multilingual guidance, and faster field decisions.',
-                              style: TextStyle(
+                              copy.splashFeature,
+                              style: const TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 height: 1.35,
@@ -141,21 +178,28 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Row(
+                    Row(
                       children: [
-                        Expanded(
+                        const Expanded(
                           child: LinearProgressIndicator(
                             minHeight: 8,
-                            borderRadius: BorderRadius.all(Radius.circular(999)),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(999),
+                            ),
                             value: 0.72,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.green),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.green,
+                            ),
                             backgroundColor: AppColors.white,
                           ),
                         ),
-                        SizedBox(width: 10),
+                        const SizedBox(width: 10),
                         Text(
-                          'Loading...',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                          copy.loading,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
@@ -163,10 +207,12 @@ class _SplashScreenState extends State<SplashScreen> {
                     FilledButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const DashboardScreen(),
+                          ),
                         );
                       },
-                      child: const Text('Start Now'),
+                      child: Text(copy.startNow),
                     ),
                   ],
                 ),

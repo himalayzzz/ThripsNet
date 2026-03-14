@@ -1,12 +1,11 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/wind_spread_calculator.dart';
 import '../../../../../services/wind_spread_notification_manager.dart';
@@ -90,11 +89,11 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
   }
 
   Future<Position> _requestCurrentLocation() async {
+    final AppCopy copy = AppCopy.of(context);
+
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
-      throw Exception(
-        'Location services are disabled. Enable GPS and try again.',
-      );
+      throw Exception(copy.locationServicesDisabled);
     }
 
     var permission = await Geolocator.checkPermission();
@@ -104,9 +103,7 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
 
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      throw Exception(
-        'Location permission denied. Please allow location access.',
-      );
+      throw Exception(copy.locationPermissionDenied);
     }
 
     return Geolocator.getCurrentPosition(
@@ -115,14 +112,16 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
   }
 
   Future<void> _toggleNotifications() async {
+    final AppCopy copy = AppCopy.of(context);
+
     try {
       if (_notificationsActive) {
         await WindSpreadNotificationManager.stop();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Wind spread notifications stopped'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(copy.windNotificationsStopped),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -130,11 +129,9 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
         await WindSpreadNotificationManager.start();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Wind spread notifications started (every 10 seconds)',
-              ),
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: Text(copy.windNotificationsStarted),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -144,7 +141,7 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(copy.errorWithValue(e.toString())),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
@@ -186,6 +183,7 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
     final origin = _origin;
     final mapPoints = <LatLng>[
       ...(origin == null ? const <LatLng>[] : [origin]),
@@ -194,12 +192,40 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Spread Prediction',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.spreadPrediction,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
         actions: [
-          // Notification status indicator
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              final String direction = _isLoading
+                  ? copy.loading
+                  : copy.windDirectionValue(
+                      _directionLabel(_windDirection),
+                      _windDirection.toStringAsFixed(0),
+                    );
+              final String speed = _isLoading
+                  ? copy.loading
+                  : copy.windSpeedValue((_windSpeed * 3.6).toStringAsFixed(1));
+              final String status = _notificationsActive
+                  ? copy.active
+                  : copy.paused;
+              final String errorText = _error == null ? '' : '$_error. ';
+              return '${copy.spreadPrediction}. '
+                  '${copy.active}: $status. '
+                  '${copy.aiSpreadForecast}. '
+                  '${copy.spreadForecastSubtitle}. '
+                  '$errorText'
+                  '${copy.detectionLocationOrigin}. '
+                  '${copy.windDirection}: $direction. '
+                  '${copy.windSpeed}: $speed. '
+                  '${copy.nextFiveLikelySpots}. '
+                  '${copy.spreadPageExplanation}. '
+                  '${copy.sendAlert}.';
+            },
+          ),
           Center(
             child: Container(
               margin: const EdgeInsets.only(right: 16),
@@ -224,7 +250,7 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _notificationsActive ? 'Active' : 'Paused',
+                    _notificationsActive ? copy.active : copy.paused,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -237,13 +263,16 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
               ),
             ),
           ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _toggleNotifications,
         backgroundColor: _notificationsActive ? Colors.orange : AppColors.blue,
         child: Icon(
-          _notificationsActive ? Icons.notifications_off : Icons.notifications_active,
+          _notificationsActive
+              ? Icons.notifications_off
+              : Icons.notifications_active,
           color: Colors.white,
         ),
       ),
@@ -267,21 +296,21 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                 ),
               ],
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AI Spread Forecast',
-                  style: TextStyle(
+                  copy.aiSpreadForecast,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                     fontSize: 25,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  'Prediction combines detected infection point and wind flow to estimate nearby risk zones.',
-                  style: TextStyle(
+                  copy.spreadForecastSubtitle,
+                  style: const TextStyle(
                     color: Color(0xFFF0FFFB),
                     fontWeight: FontWeight.w600,
                     fontSize: 15.5,
@@ -375,19 +404,19 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                   const SizedBox(height: 12),
                   _legendItem(
                     color: Color(0xFFD9493F),
-                    text: 'Detection location (origin)',
+                    text: copy.detectionLocationOrigin,
                   ),
                   const SizedBox(height: 6),
                   _legendItem(
                     color: Color(0xFFE6952B),
-                    text: 'Next 5 likely wind spread spots',
+                    text: copy.nextFiveLikelySpots,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     FilledButton.tonalIcon(
                       onPressed: _loadPrediction,
                       icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('Retry Location & Weather'),
+                      label: Text(copy.retryLocationWeather),
                     ),
                   ],
                 ],
@@ -404,9 +433,9 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Wind Direction',
-                          style: TextStyle(
+                        Text(
+                          copy.windDirection,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             color: AppColors.textMuted,
                           ),
@@ -414,8 +443,11 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _isLoading
-                              ? 'Loading...'
-                              : '${_directionLabel(_windDirection)} (${_windDirection.toStringAsFixed(0)} deg)',
+                              ? copy.loading
+                              : copy.windDirectionValue(
+                                  _directionLabel(_windDirection),
+                                  _windDirection.toStringAsFixed(0),
+                                ),
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
@@ -435,9 +467,9 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Wind Speed',
-                          style: TextStyle(
+                        Text(
+                          copy.windSpeed,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             color: AppColors.textMuted,
                           ),
@@ -445,8 +477,10 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                         const SizedBox(height: 4),
                         Text(
                           _isLoading
-                              ? 'Loading...'
-                              : '${(_windSpeed * 3.6).toStringAsFixed(1)} km/h',
+                              ? copy.loading
+                              : copy.windSpeedValue(
+                                  (_windSpeed * 3.6).toStringAsFixed(1),
+                                ),
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
@@ -461,12 +495,12 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(14),
+              padding: const EdgeInsets.all(14),
               child: Text(
-                'Location is requested on this page, then the app predicts and plots five likely spread spots from current wind flow.',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                copy.spreadPageExplanation,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -480,9 +514,12 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
               );
             },
             icon: const Icon(Icons.notification_add_rounded),
-            label: const Text(
-              'Send Alert',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5),
+            label: Text(
+              copy.sendAlert,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16.5,
+              ),
             ),
           ),
         ],

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../disease_info/disease_info_screen.dart';
 
@@ -34,12 +37,29 @@ class AlertNotificationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Alert Notification',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.alertNotification,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              return '${copy.alertNotification}. '
+                  '${copy.highRiskAlert}. '
+                  '${copy.alertSubtitle}. '
+                  '${copy.northEastWind}. ${copy.riskRadiusTenKm}. ${copy.zoneAlertsActive}. '
+                  '${copy.aiGuidance}. '
+                  '${copy.alertBullet1} ${copy.alertBullet2} ${copy.alertBullet3}. '
+                  '${copy.openPreventiveMeasures}.';
+            },
+          ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -64,14 +84,18 @@ class AlertNotificationScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.white, size: 30),
-                    SizedBox(width: 10),
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'ThripsNet High Risk Alert',
-                        style: TextStyle(
+                        copy.highRiskAlert,
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -82,9 +106,9 @@ class AlertNotificationScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'TSWV detected near your farm. Prompt intervention is recommended to reduce spread.',
-                  style: TextStyle(
+                Text(
+                  copy.alertSubtitle,
+                  style: const TextStyle(
                     color: Color(0xFFFEF8E9),
                     fontWeight: FontWeight.w600,
                     fontSize: 15.5,
@@ -96,9 +120,18 @@ class AlertNotificationScreen extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _metaChip(icon: Icons.air_rounded, label: 'North-East Wind'),
-                    _metaChip(icon: Icons.radar_rounded, label: 'Risk Radius 10 km'),
-                    _metaChip(icon: Icons.notifications_active_rounded, label: 'Zone Alerts Active'),
+                    _metaChip(
+                      icon: Icons.air_rounded,
+                      label: copy.northEastWind,
+                    ),
+                    _metaChip(
+                      icon: Icons.radar_rounded,
+                      label: copy.riskRadiusTenKm,
+                    ),
+                    _metaChip(
+                      icon: Icons.notifications_active_rounded,
+                      label: copy.zoneAlertsActive,
+                    ),
                   ],
                 ),
               ],
@@ -110,17 +143,21 @@ class AlertNotificationScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    'AI Guidance',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                    copy.aiGuidance,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
-                  SizedBox(height: 8),
-                  Text('• Risk notifications are now sent to farmers in the surrounding zone.'),
-                  SizedBox(height: 4),
-                  Text('• Recommend immediate preventive action in border rows first.'),
-                  SizedBox(height: 4),
-                  Text('• Open disease guide for language-specific treatment steps.'),
+                  const SizedBox(height: 8),
+                  Text(copy.alertBullet1),
+                  const SizedBox(height: 4),
+                  Text(copy.alertBullet2),
+                  const SizedBox(height: 4),
+                  Text(copy.alertBullet3),
                 ],
               ),
             ),
@@ -134,9 +171,12 @@ class AlertNotificationScreen extends StatelessWidget {
             },
             style: FilledButton.styleFrom(backgroundColor: AppColors.green),
             icon: const Icon(Icons.menu_book_rounded),
-            label: const Text(
-              'Open Preventive Measures',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5),
+            label: Text(
+              copy.openPreventiveMeasures,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16.5,
+              ),
             ),
           ),
         ],

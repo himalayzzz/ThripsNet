@@ -4,7 +4,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
 import '../../../../../common/leaf_disease_classifier.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/detection_state.dart';
 import '../detection_result/detection_result_screen.dart';
@@ -25,6 +28,8 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      await PageVoiceButton.stopAnySpeaking();
+
       final XFile? picked = await _picker.pickImage(
         source: source,
         imageQuality: 90,
@@ -38,17 +43,15 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
         _selectedImage = picked;
         _selectedInput = source == ImageSource.camera ? 'camera' : 'gallery';
         _selectedSource = source == ImageSource.camera
-            ? 'Captured image selected: ${picked.name}'
-            : 'Uploaded image selected: ${picked.name}';
+            ? AppCopy.of(context).capturedImageSelected(picked.name)
+            : AppCopy.of(context).uploadedImageSelected(picked.name);
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open camera/gallery. Please allow app permissions in settings.'),
-        ),
+        SnackBar(content: Text(AppCopy.of(context).imagePickerPermissionError)),
       );
     }
   }
@@ -76,9 +79,23 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 14.5, color: AppColors.textMuted, height: 1.35)),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 14.5,
+                color: AppColors.textMuted,
+                height: 1.35,
+              ),
+            ),
           ],
         ),
       ),
@@ -90,19 +107,21 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
       return;
     }
 
+    final AppCopy copy = AppCopy.of(context);
+
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Processing'),
+          title: Text(copy.processing),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Analyzing leaf image...'),
-              SizedBox(height: 8),
-              Text('Running AI model...'),
+            children: [
+              Text(copy.analyzingLeafImage),
+              const SizedBox(height: 8),
+              Text(copy.runningAiModel),
             ],
           ),
         );
@@ -110,7 +129,9 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
     );
 
     try {
-      final LeafDiseasePrediction prediction = await _classifier.classifyImage(File(_selectedImage!.path));
+      final LeafDiseasePrediction prediction = await _classifier.classifyImage(
+        File(_selectedImage!.path),
+      );
       if (!mounted) {
         return;
       }
@@ -121,9 +142,7 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
       DetectionState.thripsDetected = hasDisease;
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => DetectionResultScreen(
-            prediction: prediction,
-          ),
+          builder: (_) => DetectionResultScreen(prediction: prediction),
         ),
       );
     } catch (error, stackTrace) {
@@ -135,17 +154,42 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
 
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Model evaluation failed: $error'),
-        ),
+        SnackBar(content: Text(copy.modelEvaluationFailed(error.toString()))),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan Crop Leaf', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800))),
+      appBar: AppBar(
+        title: Text(
+          copy.scanCropLeaf,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              final String selectedState = _selectedImage == null
+                  ? copy.noImageSelected
+                  : (_selectedSource ?? copy.noImageSelected);
+              return '${copy.scanCropLeaf}. '
+                  '${copy.runAiLeafAnalysis}. '
+                  '${copy.leafAnalysisSubtitle}. '
+                  '${copy.chooseInputSource}. '
+                  '${copy.provideImageForAnalysis}. '
+                  '${copy.captureImage}. ${copy.captureImageSubtitle}. '
+                  '${copy.uploadImage}. ${copy.uploadImageSubtitle}. '
+                  '$selectedState. '
+                  '${copy.detectDisease}.';
+            },
+          ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -159,32 +203,54 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
               ),
               borderRadius: BorderRadius.circular(28),
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Icon(Icons.eco_outlined, size: 94, color: AppColors.mintDeep),
-                SizedBox(height: 12),
-                Text(
-                  'Run AI leaf analysis in seconds',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                const Icon(
+                  Icons.eco_outlined,
+                  size: 94,
+                  color: AppColors.mintDeep,
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 12),
                 Text(
-                  'Capture or upload a crop leaf to identify visible disease patterns quickly.',
+                  copy.runAiLeafAnalysis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15.5, color: AppColors.textMuted, height: 1.4),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  copy.leafAnalysisSubtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          Text('Choose Input Source', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 24)),
+          Text(
+            copy.chooseInputSource,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontSize: 24),
+          ),
           const SizedBox(height: 4),
-          Text('Select how you want to provide the image for analysis.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15.5)),
+          Text(
+            copy.provideImageForAnalysis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 15.5),
+          ),
           const SizedBox(height: 10),
           _sourceCard(
-            title: 'Capture Image',
-            subtitle: 'Use the camera for a fresh scan directly from the field.',
+            title: copy.captureImage,
+            subtitle: copy.captureImageSubtitle,
             selected: _selectedInput == 'camera',
             onTap: () {
               _pickImage(ImageSource.camera);
@@ -192,8 +258,8 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
           ),
           const SizedBox(height: 10),
           _sourceCard(
-            title: 'Upload Image',
-            subtitle: 'Choose an existing image and let the model inspect it.',
+            title: copy.uploadImage,
+            subtitle: copy.uploadImageSubtitle,
             selected: _selectedInput == 'gallery',
             onTap: () {
               _pickImage(ImageSource.gallery);
@@ -225,15 +291,22 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
               border: Border.all(color: AppColors.borderSoft),
             ),
             child: Text(
-              _selectedSource ?? 'No image selected',
+              _selectedSource ?? copy.noImageSelected,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: _selectedImage == null ? null : _runDetection,
-            child: const Text('Detect Disease', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            child: Text(
+              copy.detectDisease,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),

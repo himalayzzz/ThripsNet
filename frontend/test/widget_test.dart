@@ -6,15 +6,19 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:frontend/common/app_language.dart';
 import 'package:frontend/main.dart';
 
 void main() {
   testWidgets('ThripsNet home screen renders', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const ThripsNetApp());
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final AppLanguageController controller = await AppLanguageController.load();
 
-    expect(find.text('ThripsNet Mobile'), findsOneWidget);
-    expect(find.text('Start Detection'), findsOneWidget);
+    await tester.pumpWidget(ThripsNetApp(languageController: controller));
+
+    expect(find.text('THRIPSNET'), findsOneWidget);
+    expect(find.text('Start Now'), findsOneWidget);
   });
 }

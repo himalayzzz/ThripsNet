@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/detection_state.dart';
+import '../../../../../common/page_voice_button.dart';
+import '../alert_notification/alert_notification_screen.dart';
 import '../disease_info/disease_info_screen.dart';
 import '../leaf_scan/leaf_scan_screen.dart';
 import '../seed_scan/seed_scan_screen.dart';
@@ -20,14 +24,19 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   String _location = 'Idukki';
+  AppLanguage? _lastLanguage;
 
   @override
-  void initState() {
-    super.initState();
-    _refreshLocation();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final AppLanguage currentLanguage = AppLanguageScope.languageOf(context);
+    if (_lastLanguage != currentLanguage) {
+      _lastLanguage = currentLanguage;
+      _refreshLocation(languageCode: currentLanguage.code);
+    }
   }
 
-  Future<void> _refreshLocation() async {
+  Future<void> _refreshLocation({required String languageCode}) async {
     try {
       final bool enabled = await Geolocator.isLocationServiceEnabled();
       if (!enabled) {
@@ -39,23 +48,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         permission = await Geolocator.requestPermission();
       }
 
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return;
       }
 
       final Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
 
       final Uri uri = Uri.parse(
-        'https://geocoding-api.open-meteo.com/v1/reverse?latitude=${position.latitude}&longitude=${position.longitude}&count=1&language=en&format=json',
+        'https://geocoding-api.open-meteo.com/v1/reverse?latitude=${position.latitude}&longitude=${position.longitude}&count=1&language=$languageCode&format=json',
       );
       final response = await http.get(uri);
       if (response.statusCode != 200) {
         return;
       }
 
-      final Map<String, dynamic> body = jsonDecode(response.body) as Map<String, dynamic>;
+      final Map<String, dynamic> body =
+          jsonDecode(response.body) as Map<String, dynamic>;
       final List<dynamic>? results = body['results'] as List<dynamic>?;
       if (results == null || results.isEmpty) {
         return;
@@ -83,22 +96,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openWeatherFlow(BuildContext context) async {
+    final AppCopy copy = AppCopy.of(context);
+    final String languageCode = AppLanguageScope.languageOf(context).code;
+
     if (!DetectionState.thripsDetected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Run detection first, then open Weather map.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(copy.runDetectionFirstSnack)));
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SpreadPredictionScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SpreadPredictionScreen()));
     if (!mounted) {
       return;
     }
-    _refreshLocation();
+    _refreshLocation(languageCode: languageCode);
   }
 
   Widget _infoPill(String text) {
@@ -122,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _actionTile({
     required BuildContext context,
+    required AppCopy copy,
     required String title,
     required String subtitle,
     required String tag,
@@ -139,7 +154,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.softBlue,
                   borderRadius: BorderRadius.circular(999),
@@ -157,31 +175,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 10),
               Text(
                 title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800, fontSize: 22, height: 1.05),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 22,
+                  height: 1.05,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14.5, height: 1.3),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontSize: 14.5, height: 1.3),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
               ),
               const Spacer(),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text(
-                    'Tap to continue',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: AppColors.textMuted,
+                children: [
+                  Expanded(
+                    child: Text(
+                      copy.tapToContinue,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
-                    'Open',
-                    style: TextStyle(
+                    copy.open,
+                    style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
                       color: AppColors.blue,
@@ -198,12 +228,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+    final double screenWidth = MediaQuery.sizeOf(context).width;
+    final double quickActionAspectRatio = screenWidth < 380 ? 0.74 : 0.84;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Good Morning',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.goodMorning,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              final String weatherTileText =
+                  '${copy.weatherTag}. '
+                  '${copy.weatherTitle}. '
+                  '${copy.windTapToFetchLive}. '
+                  '${copy.showsNext5Spots}. '
+                  '${copy.open}.';
+              return '${copy.goodMorning}. '
+                  '${copy.aiFieldGuide}. ${copy.liveInsights}. '
+                  '${copy.welcomeFarmer}. '
+                  '${copy.healthyCropsToday}. '
+                  '${copy.locationWithValue(_location)}. '
+                  '${copy.climateSnapshot}. '
+                  '${copy.quickActions}. '
+                  '${copy.chooseWorkflow}. '
+                  '${copy.detectionTag}. ${copy.scanLeaf}. ${copy.scanLeafSubtitle}. ${copy.tapToContinue}. ${copy.open}. '
+                  '${copy.qualityTag}. ${copy.scanSeed}. ${copy.scanSeedSubtitle}. ${copy.tapToContinue}. ${copy.open}. '
+                  '${copy.monitorTag}. ${copy.viewAlerts}. ${copy.viewAlertsSubtitle}. ${copy.tapToContinue}. ${copy.open}. '
+                  '$weatherTileText '
+                  '${copy.exploreDiseasePrevention}.';
+            },
+          ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
@@ -228,33 +291,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    _infoPill('AI FIELD GUIDE'),
-                    const SizedBox(width: 8),
-                    _infoPill('LIVE INSIGHTS'),
+                    _infoPill(copy.aiFieldGuide),
+                    _infoPill(copy.liveInsights),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Welcome Farmer',
+                  copy.welcomeFarmer,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 30,
-                      ),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 30,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Let us focus on healthy crops today.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: const Color(0xFFF3FFF9), fontSize: 16.5, height: 1.35),
+                  copy.healthyCropsToday,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFFF3FFF9),
+                    fontSize: 16.5,
+                    height: 1.35,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Location: $_location',
+                  copy.locationWithValue(_location),
                   style: const TextStyle(
                     color: Color(0xFFF3FFF9),
                     fontWeight: FontWeight.w700,
@@ -262,9 +327,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text(
-                  'Humidity 71% | Temp 29 C',
-                  style: TextStyle(
+                Text(
+                  copy.climateSnapshot,
+                  style: const TextStyle(
                     color: Color(0xFFE9FFF4),
                     fontWeight: FontWeight.w500,
                     fontSize: 15,
@@ -292,13 +357,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Quick Actions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 24),
+            copy.quickActions,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontSize: 24),
           ),
           const SizedBox(height: 4),
           Text(
-            'Choose an AI-assisted workflow for detection and prevention.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15.5),
+            copy.chooseWorkflow,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 15.5),
           ),
           const SizedBox(height: 12),
           GridView.count(
@@ -307,13 +376,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisSpacing: 10,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 0.9,
+            childAspectRatio: quickActionAspectRatio,
             children: [
               _actionTile(
                 context: context,
-                title: 'Scan Leaf',
-                subtitle: 'Capture leaf image and run AI detection.',
-                tag: 'DETECTION',
+                copy: copy,
+                title: copy.scanLeaf,
+                subtitle: copy.scanLeafSubtitle,
+                tag: copy.detectionTag,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const LeafScanScreen()),
@@ -322,23 +392,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               _actionTile(
                 context: context,
-                title: 'Scan Seed',
-                subtitle: 'Capture seed image and check health indicators.',
-                tag: 'QUALITY',
+                copy: copy,
+                title: copy.scanSeed,
+                subtitle: copy.scanSeedSubtitle,
+                tag: copy.qualityTag,
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SeedScanScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const SeedScanScreen()),
                   );
                 },
               ),
               _actionTile(
                 context: context,
-                title: 'View Alerts',
-                subtitle: 'See latest field warnings and updates.',
-                tag: 'MONITOR',
-                onTap: () {},
+                copy: copy,
+                title: copy.viewAlerts,
+                subtitle: copy.viewAlertsSubtitle,
+                tag: copy.monitorTag,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AlertNotificationScreen(),
+                    ),
+                  );
+                },
               ),
               Card(
                 margin: EdgeInsets.zero,
@@ -354,14 +430,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.softYellow,
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          child: const Text(
-                            'WEATHER',
-                            style: TextStyle(
+                          child: Text(
+                            copy.weatherTag,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 11,
                               color: AppColors.textPrimary,
@@ -370,21 +449,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'Weather',
-                          style: TextStyle(
+                        Text(
+                          copy.weatherTitle,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
                             color: AppColors.textPrimary,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
-                        const Text('Wind: tap to fetch live', style: TextStyle(fontSize: 14.5, height: 1.25)),
-                        const Text('Shows next 5 spots', style: TextStyle(fontSize: 14.5, height: 1.25)),
+                        Text(
+                          copy.windTapToFetchLive,
+                          style: const TextStyle(fontSize: 14.5, height: 1.25),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          copy.showsNext5Spots,
+                          style: const TextStyle(fontSize: 14.5, height: 1.25),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         const Spacer(),
-                        const Text(
-                          'Open',
-                          style: TextStyle(
+                        Text(
+                          copy.open,
+                          style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 15,
                             color: AppColors.blue,
@@ -404,9 +495,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(builder: (_) => const DiseaseInfoScreen()),
               );
             },
-            child: const Text(
-              'Explore Disease Prevention',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            child: Text(
+              copy.exploreDiseasePrevention,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
           ),
         ],

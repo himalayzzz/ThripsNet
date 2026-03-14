@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/leaf_disease_classifier.dart';
 import '../../../../../common/detection_state.dart';
@@ -8,32 +11,50 @@ import '../spread_prediction/spread_prediction_screen.dart';
 class DetectionResultScreen extends StatelessWidget {
   final LeafDiseasePrediction prediction;
 
-  const DetectionResultScreen({
-    super.key,
-    required this.prediction,
-  });
+  const DetectionResultScreen({super.key, required this.prediction});
 
-  String get _riskLevel {
+  String _riskLevel(AppCopy copy) {
     if (prediction.confidence < 0.5) {
-      return 'Low';
+      return copy.riskLow;
     }
     if (prediction.confidence >= 0.8) {
-      return 'High';
+      return copy.riskHigh;
     }
     if (prediction.confidence >= 0.6) {
-      return 'Moderate';
+      return copy.riskModerate;
     }
-    return 'Needs manual verification';
+    return copy.riskNeedsManualVerification;
   }
 
-  String get _displayDiagnosis {
-    if (prediction.label.toLowerCase().contains('healthy')) {
-      return 'No Disease Found';
+  String _displayDiagnosis(AppCopy copy) {
+    if (prediction.label == 'Seed quality model not configured') {
+      return copy.seedModelNotConfigured;
     }
-    return prediction.label;
+    return copy.translateDiseaseLabel(prediction.label);
   }
 
-  Widget _statTile({required String label, required String value, required IconData icon}) {
+  String _displaySymptoms(AppCopy copy) {
+    if (prediction.symptoms.length == 1 &&
+        prediction.symptoms.first ==
+            'No seed classifier configured for this flow yet.') {
+      return copy.noSeedClassifierConfigured;
+    }
+    return prediction.symptoms.map(copy.translateSymptom).join(' | ');
+  }
+
+  String _displayRecommendation(AppCopy copy) {
+    if (prediction.recommendation ==
+        'Connect a dedicated seed model for accurate seed condition predictions.') {
+      return copy.connectDedicatedSeedModel;
+    }
+    return copy.translateRecommendation(prediction.recommendation);
+  }
+
+  Widget _statTile({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -57,9 +78,22 @@ class DetectionResultScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textMuted)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.textPrimary)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -70,12 +104,35 @@ class DetectionResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Detection Result',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.detectionResult,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              final String diagnosis = _displayDiagnosis(copy);
+              final String confidence = (prediction.confidence * 100)
+                  .toStringAsFixed(1);
+              return '${copy.detectionResult}. '
+                  '${copy.aiDetectionComplete}. '
+                  '${copy.detectionCompleteSubtitle}. '
+                  '${copy.modelPrediction}. '
+                  '$diagnosis. '
+                  '${copy.confidenceWithValue('$confidence%')}. '
+                  '${copy.detectedSymptoms}: ${_displaySymptoms(copy)}. '
+                  '${copy.riskLevel}: ${_riskLevel(copy)}. '
+                  '${copy.recommendationWithValue(_displayRecommendation(copy))}. '
+                  '${copy.weatherSpreadMap}.';
+            },
+          ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -97,17 +154,26 @@ class DetectionResultScreen extends StatelessWidget {
                 ),
               ],
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AI Detection Complete',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 25),
+                  copy.aiDetectionComplete,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 25,
+                  ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  'The model has identified likely infection markers and generated spread-risk context.',
-                  style: TextStyle(color: Color(0xFFF2FFF8), fontWeight: FontWeight.w600, fontSize: 15.5, height: 1.35),
+                  copy.detectionCompleteSubtitle,
+                  style: const TextStyle(
+                    color: Color(0xFFF2FFF8),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15.5,
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
@@ -120,14 +186,22 @@ class DetectionResultScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Model Prediction',
-                    style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                  Text(
+                    copy.modelPrediction,
+                    style: const TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "TSWV virus detected on leaf",
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    _displayDiagnosis(copy),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   LinearProgressIndicator(
@@ -135,23 +209,30 @@ class DetectionResultScreen extends StatelessWidget {
                     minHeight: 10,
                     borderRadius: BorderRadius.circular(999),
                     backgroundColor: AppColors.white,
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.green),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.green,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Confidence: ${(prediction.confidence * 100).toStringAsFixed(1)}%',
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    copy.confidenceWithValue(
+                      '${(prediction.confidence * 100).toStringAsFixed(1)}%',
+                    ),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _statTile(
-                    label: 'Detected Symptoms',
-                    value: prediction.symptoms.join(' | '),
+                    label: copy.detectedSymptoms,
+                    value: _displaySymptoms(copy),
                     icon: Icons.visibility_rounded,
                   ),
                   const SizedBox(height: 10),
                   _statTile(
-                    label: 'Risk Level',
-                    value: _riskLevel,
+                    label: copy.riskLevel,
+                    value: _riskLevel(copy),
                     icon: Icons.warning_amber_rounded,
                   ),
                 ],
@@ -163,8 +244,11 @@ class DetectionResultScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                'Recommendation: ${prediction.recommendation}',
-                style: const TextStyle(fontWeight: FontWeight.w600, height: 1.4),
+                copy.recommendationWithValue(_displayRecommendation(copy)),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
               ),
             ),
           ),
@@ -173,18 +257,23 @@ class DetectionResultScreen extends StatelessWidget {
             onPressed: () {
               if (!DetectionState.thripsDetected) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No thrips detection found yet.')),
+                  SnackBar(content: Text(copy.noThripsDetectionFoundYet)),
                 );
                 return;
               }
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SpreadPredictionScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const SpreadPredictionScreen(),
+                ),
               );
             },
             icon: const Icon(Icons.map_rounded),
-            label: const Text(
-              'Weather Spread Map',
-              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5),
+            label: Text(
+              copy.weatherSpreadMap,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 16.5,
+              ),
             ),
           ),
         ],

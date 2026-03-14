@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/app_tts_service.dart';
 
@@ -11,16 +13,30 @@ class DiseaseInfoScreen extends StatefulWidget {
 }
 
 class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
-  String _selectedLanguage = 'English';
   final AppTtsService _ttsService = AppTtsService();
   bool _isSpeaking = false;
   int _speakRequestId = 0;
-  final Map<String, String> _languageLabels = const {
-    'English': 'EN',
-    'Hindi': 'HIN',
-    'Malayalam': 'M',
-    'Kannada': 'KAN',
-  };
+
+  Future<void> _onLanguageChanging(
+    AppLanguage previousLanguage,
+    AppLanguage nextLanguage,
+  ) async {
+    if (!_isSpeaking) {
+      return;
+    }
+
+    // Invalidate any in-flight TTS completion and stop audio immediately.
+    _speakRequestId++;
+    await _ttsService.stop();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isSpeaking = false;
+    });
+  }
 
   @override
   void initState() {
@@ -44,7 +60,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
   }
 
   Future<void> _listen() async {
-    final LocalizedContent content = _getContentForLanguage(_selectedLanguage);
+    final AppLanguage currentLanguage = AppLanguageScope.languageOf(context);
+    final AppCopy copy = AppCopy.of(context);
+    final LocalizedContent content = _getContentForLanguage(currentLanguage);
     final String fullText = _buildSpeechTextFromDisplayedContent(content);
     final int requestId = ++_speakRequestId;
 
@@ -59,7 +77,7 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
 
       final AppTtsSpeakResult result = await _ttsService.speak(
         text: fullText,
-        appLanguageCode: _languageKey(_selectedLanguage),
+        appLanguageCode: currentLanguage.code,
       );
 
       // Ignore stale completions from a previously interrupted request.
@@ -71,11 +89,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
         setState(() {
           _isSpeaking = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not start voice. Open phone settings > Text-to-speech output and set an engine/voice.'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(copy.couldNotStartVoice)));
         return;
       }
 
@@ -83,7 +99,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
         setState(() {
           _isSpeaking = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Finished audio in ${result.languageLabel}.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(copy.audioFinished(result.languageLabel))),
+        );
       }
     } catch (_) {
       if (requestId != _speakRequestId) {
@@ -93,11 +111,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
         setState(() {
           _isSpeaking = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Voice playback failed. Please verify Text-to-speech output in phone settings.'),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(copy.voicePlaybackFailed)));
       }
     }
   }
@@ -150,22 +166,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
     );
   }
 
-  String _languageKey(String language) {
+  LocalizedContent _getContentForLanguage(AppLanguage language) {
     switch (language) {
-      case 'Malayalam':
-        return 'ml';
-      case 'Hindi':
-        return 'hi';
-      case 'Kannada':
-        return 'kn';
-      default:
-        return 'en';
-    }
-  }
-
-  LocalizedContent _getContentForLanguage(String language) {
-    switch (language) {
-      case 'Kannada':
+      case AppLanguage.kannada:
         return const LocalizedContent(
           disease: 'ಟೊಮ್ಯಾಟೊ ಸ್ಪಾಟೆಡ್ ವಿಲ್ಟ್ ವೈರಸ್ (TSWV)',
           symptomsHeader: 'ಲಕ್ಷಣಗಳು',
@@ -187,7 +190,8 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
               ],
             ),
             MeasureSection(
-              title: '2. ಅಂಚಿನ ಸಸಿಗಳ ಮೇಲೆ ನೀಮ್ ಎಣ್ಣೆ ಸಿಂಪಡಿಸಿ (ಸೂರ್ಯಾಸ್ತಕ್ಕೂ ಮುನ್ನ)',
+              title:
+                  '2. ಅಂಚಿನ ಸಸಿಗಳ ಮೇಲೆ ನೀಮ್ ಎಣ್ಣೆ ಸಿಂಪಡಿಸಿ (ಸೂರ್ಯಾಸ್ತಕ್ಕೂ ಮುನ್ನ)',
               steps: [
                 'ನೀಮ್ ಎಣ್ಣೆ (Azadirachtin) ಅಥವಾ Spinosad ಕೀಟನಾಶಕ ದ್ರಾವಣವನ್ನು ತಯಾರಿಸಿ',
                 'ಬಾಟಲಿಯ ಮೇಲಿನ ಸೂಚನೆಗಳಂತೆ ದ್ರಾವಣವನ್ನು ಮಿಶ್ರಣ ಮಾಡಿ',
@@ -218,7 +222,7 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
           tipBody:
               'ನಿಮ್ಮ ಸಸಿಗಳನ್ನು ಪ್ರತಿದಿನ ಪರಿಶೀಲಿಸಿ. ವಲಯ ಕಲೆಗಳು, ಬ್ರೋನ್ಜಿಂಗ್ ಅಥವಾ ದುರ್ಬಲ ಸಸಿಗಳು ಕಂಡುಬಂದರೆ, ರೋಗ ಹರಡುವುದನ್ನು ತಡೆಯಲು ಅವನ್ನು ತಕ್ಷಣ ತೆಗೆದುಹಾಕಿ.',
         );
-      case 'Malayalam':
+      case AppLanguage.malayalam:
         return const LocalizedContent(
           disease: 'തക്കാളി സ്പോട്ടഡ് വിൽറ്റ് വൈറസ് (TSWV)',
           symptomsHeader: 'രോഗലക്ഷണങ്ങൾ',
@@ -240,7 +244,8 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
               ],
             ),
             MeasureSection(
-              title: '2. അതിർത്തി ചെടികളിൽ നീം ഓയിൽ സ്പ്രേ ചെയ്യുക (സൂര്യാസ്തമയത്തിന് മുൻപ്)',
+              title:
+                  '2. അതിർത്തി ചെടികളിൽ നീം ഓയിൽ സ്പ്രേ ചെയ്യുക (സൂര്യാസ്തമയത്തിന് മുൻപ്)',
               steps: [
                 'നീം ഓയിൽ (Azadirachtin) അല്ലെങ്കിൽ Spinosad സ്പ്രേ തയ്യാറാക്കുക',
                 'ബോട്ടിലിലെ നിർദ്ദേശപ്രകാരം മിശ്രിതം തയ്യാറാക്കുക',
@@ -271,7 +276,7 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
           tipBody:
               'ദിവസവും ചെടികൾ പരിശോധിക്കുക. വളയ പാടുകൾ, ബ്രോൺസിംഗ്, അല്ലെങ്കിൽ ദുർബലമായ ചെടികൾ കണ്ടാൽ രോഗവ്യാപനം തടയാൻ അവ ഉടൻ നീക്കം ചെയ്യുക.',
         );
-      case 'Hindi':
+      case AppLanguage.hindi:
         return const LocalizedContent(
           disease: 'टमाटर स्पॉटेड विल्ट वायरस (TSWV)',
           symptomsHeader: 'लक्षण',
@@ -328,11 +333,7 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
         return const LocalizedContent(
           disease: 'Tomato Spotted Wilt Virus (TSWV)',
           symptomsHeader: 'Symptoms',
-          symptoms: [
-            'Ring spots',
-            'Leaf bronzing',
-            'Stunted growth',
-          ],
+          symptoms: ['Ring spots', 'Leaf bronzing', 'Stunted growth'],
           preventiveHeader: 'Preventive Measures',
           measures: [
             MeasureSection(
@@ -382,74 +383,20 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final LocalizedContent content = _getContentForLanguage(_selectedLanguage);
+    final AppCopy copy = AppCopy.of(context);
+    final AppLanguage currentLanguage = AppLanguageScope.languageOf(context);
+    final LocalizedContent content = _getContentForLanguage(currentLanguage);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Disease Information',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.diseaseInformation,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: PopupMenuButton<String>(
-              tooltip: 'Change language',
-              onSelected: (String language) async {
-                if (language == _selectedLanguage) {
-                  return;
-                }
-
-                // Cancel current playback when switching the spoken language.
-                _speakRequestId++;
-                await _ttsService.stop();
-
-                if (!mounted) {
-                  return;
-                }
-
-                setState(() {
-                  _isSpeaking = false;
-                  _selectedLanguage = language;
-                });
-              },
-              itemBuilder: (BuildContext context) {
-                return _languageLabels.entries
-                    .where((MapEntry<String, String> entry) => entry.key != _selectedLanguage)
-                    .map(
-                      (MapEntry<String, String> entry) => PopupMenuItem<String>(
-                        value: entry.key,
-                        child: Row(
-                          children: [
-                            Text(
-                              entry.value,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(entry.key),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList();
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.softBlue,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      _languageLabels[_selectedLanguage] ?? 'EN',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.blue),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          LanguageToggleButton(
+            tooltip: copy.changeLanguageTooltip,
+            onLanguageChanging: _onLanguageChanging,
           ),
         ],
       ),
@@ -480,8 +427,14 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _heroChip(icon: Icons.smart_toy_rounded, text: 'AI Knowledge'),
-                    _heroChip(icon: Icons.translate_rounded, text: _languageLabels[_selectedLanguage] ?? 'EN'),
+                    _heroChip(
+                      icon: Icons.smart_toy_rounded,
+                      text: copy.aiKnowledge,
+                    ),
+                    _heroChip(
+                      icon: Icons.translate_rounded,
+                      text: currentLanguage.shortLabel,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -495,9 +448,9 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Review symptoms and apply preventive actions quickly to protect surrounding crops.',
-                  style: TextStyle(
+                Text(
+                  copy.diseaseHeroSubtitle,
+                  style: const TextStyle(
                     color: Color(0xFFF2FFF7),
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
@@ -517,11 +470,17 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.biotech_rounded, color: AppColors.mintDeep),
+                      const Icon(
+                        Icons.biotech_rounded,
+                        color: AppColors.mintDeep,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         content.symptomsHeader,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                        ),
                       ),
                     ],
                   ),
@@ -529,7 +488,10 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                   ...content.symptoms.map(
                     (String symptom) => Padding(
                       padding: const EdgeInsets.only(bottom: 5),
-                      child: Text('• $symptom', style: const TextStyle(fontSize: 15.2)),
+                      child: Text(
+                        '• $symptom',
+                        style: const TextStyle(fontSize: 15.2),
+                      ),
                     ),
                   ),
                 ],
@@ -546,11 +508,17 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.shield_outlined, color: AppColors.mintDeep),
+                      const Icon(
+                        Icons.shield_outlined,
+                        color: AppColors.mintDeep,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         content.preventiveHeader,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                        ),
                       ),
                     ],
                   ),
@@ -570,11 +538,17 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.lightbulb_outline_rounded, color: AppColors.textPrimary),
+                      const Icon(
+                        Icons.lightbulb_outline_rounded,
+                        color: AppColors.textPrimary,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         content.tipHeader,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 19),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 19,
+                        ),
                       ),
                     ],
                   ),
@@ -588,8 +562,12 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
           FilledButton.icon(
             onPressed: _onListenTap,
             style: FilledButton.styleFrom(backgroundColor: AppColors.blue),
-            icon: Icon(_isSpeaking ? Icons.stop_circle_outlined : Icons.volume_up_rounded),
-            label: Text(_isSpeaking ? 'Stop Audio' : 'Listen'),
+            icon: Icon(
+              _isSpeaking
+                  ? Icons.stop_circle_outlined
+                  : Icons.volume_up_rounded,
+            ),
+            label: Text(_isSpeaking ? copy.stopAudio : copy.listen),
           ),
         ],
       ),
@@ -614,12 +592,21 @@ class _DiseaseInfoScreenState extends State<DiseaseInfoScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(section.title, style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+                    Text(
+                      section.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     ...section.steps.map(
                       (String step) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('• $step', style: const TextStyle(height: 1.3)),
+                        child: Text(
+                          '• $step',
+                          style: const TextStyle(height: 1.3),
+                        ),
                       ),
                     ),
                   ],

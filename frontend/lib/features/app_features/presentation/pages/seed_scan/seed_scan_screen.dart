@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../../common/app_copy.dart';
+import '../../../../../common/app_language.dart';
+import '../../../../../common/page_voice_button.dart';
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/leaf_disease_classifier.dart';
 import '../../../../../common/detection_state.dart';
@@ -24,6 +27,8 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
+      await PageVoiceButton.stopAnySpeaking();
+
       final XFile? picked = await _picker.pickImage(
         source: source,
         imageQuality: 90,
@@ -37,17 +42,15 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
         _selectedImage = picked;
         _selectedInput = source == ImageSource.camera ? 'camera' : 'gallery';
         _selectedSource = source == ImageSource.camera
-            ? 'Captured seed image selected: ${picked.name}'
-            : 'Uploaded seed image selected: ${picked.name}';
+            ? AppCopy.of(context).capturedSeedImageSelected(picked.name)
+            : AppCopy.of(context).uploadedSeedImageSelected(picked.name);
       });
     } catch (_) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open camera/gallery. Please allow app permissions in settings.'),
-        ),
+        SnackBar(content: Text(AppCopy.of(context).imagePickerPermissionError)),
       );
     }
   }
@@ -75,9 +78,23 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 14.5, color: AppColors.textMuted, height: 1.35)),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 14.5,
+                color: AppColors.textMuted,
+                height: 1.35,
+              ),
+            ),
           ],
         ),
       ),
@@ -85,19 +102,21 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
   }
 
   Future<void> _runDetection() async {
+    final AppCopy copy = AppCopy.of(context);
+
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) {
         return AlertDialog(
-          title: const Text('Processing'),
-          content: const Column(
+          title: Text(copy.processing),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Analyzing seed image...'),
-              SizedBox(height: 8),
-              Text('Running AI model...'),
+              Text(copy.analyzingSeedImage),
+              const SizedBox(height: 8),
+              Text(copy.runningAiModel),
             ],
           ),
         );
@@ -117,8 +136,11 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
           prediction: LeafDiseasePrediction(
             label: 'Seed quality model not configured',
             confidence: 0.0,
-            symptoms: <String>['No seed classifier configured for this flow yet.'],
-            recommendation: 'Connect a dedicated seed model for accurate seed condition predictions.',
+            symptoms: <String>[
+              'No seed classifier configured for this flow yet.',
+            ],
+            recommendation:
+                'Connect a dedicated seed model for accurate seed condition predictions.',
           ),
         ),
       ),
@@ -127,12 +149,34 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final AppCopy copy = AppCopy.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Scan Seed',
-          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        title: Text(
+          copy.scanSeed,
+          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          PageVoiceButton(
+            textBuilder: (BuildContext context) {
+              final AppCopy copy = AppCopy.of(context);
+              final String selectedState = _selectedImage == null
+                  ? copy.noSeedImageSelected
+                  : (_selectedSource ?? copy.noSeedImageSelected);
+              return '${copy.scanSeed}. '
+                  '${copy.scanSeedQualityWithAi}. '
+                  '${copy.seedQualitySubtitle}. '
+                  '${copy.chooseInputSource}. '
+                  '${copy.provideSeedImage}. '
+                  '${copy.captureSeedImage}. ${copy.captureSeedImageSubtitle}. '
+                  '${copy.uploadSeedImage}. ${copy.uploadSeedImageSubtitle}. '
+                  '$selectedState. '
+                  '${copy.detectSeedCondition}.';
+            },
+          ),
+          LanguageToggleButton(tooltip: copy.changeLanguageTooltip),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -147,36 +191,54 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
               ),
               borderRadius: BorderRadius.circular(28),
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Icon(Icons.grain_outlined, size: 96, color: AppColors.mintDeep),
-                SizedBox(height: 12),
+                const Icon(
+                  Icons.grain_outlined,
+                  size: 96,
+                  color: AppColors.mintDeep,
+                ),
+                const SizedBox(height: 12),
                 Text(
-                  'Scan seed quality with AI support',
+                  copy.scanSeedQualityWithAi,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
-                  'Check seed condition using a captured or uploaded image before planting.',
+                  copy.seedQualitySubtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15.5, color: AppColors.textMuted, height: 1.4),
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          Text('Choose Input Source', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 24)),
+          Text(
+            copy.chooseInputSource,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontSize: 24),
+          ),
           const SizedBox(height: 4),
-          Text('Provide an image and let the model inspect seed quality cues.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15.5)),
+          Text(
+            copy.provideSeedImage,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 15.5),
+          ),
           const SizedBox(height: 10),
           _sourceCard(
-            title: 'Capture Seed Image',
-            subtitle: 'Open the camera and scan the seed sample instantly.',
+            title: copy.captureSeedImage,
+            subtitle: copy.captureSeedImageSubtitle,
             selected: _selectedInput == 'camera',
             onTap: () {
               _pickImage(ImageSource.camera);
@@ -184,8 +246,8 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
           ),
           const SizedBox(height: 10),
           _sourceCard(
-            title: 'Upload Seed Image',
-            subtitle: 'Use an existing photo for quick AI-assisted evaluation.',
+            title: copy.uploadSeedImage,
+            subtitle: copy.uploadSeedImageSubtitle,
             selected: _selectedInput == 'gallery',
             onTap: () {
               _pickImage(ImageSource.gallery);
@@ -217,17 +279,21 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
               border: Border.all(color: AppColors.borderSoft),
             ),
             child: Text(
-              _selectedSource ?? 'No seed image selected',
+              _selectedSource ?? copy.noSeedImageSelected,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: _selectedImage == null ? null : _runDetection,
-            child: const Text(
-              'Detect Seed Condition',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            child: Text(
+              copy.detectSeedCondition,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
           ),
         ],
