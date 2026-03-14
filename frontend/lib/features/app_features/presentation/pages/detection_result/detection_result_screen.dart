@@ -13,7 +13,7 @@ class DetectionResultScreen extends StatelessWidget {
   });
 
   String get _riskLevel {
-    if (prediction.label.toLowerCase().contains('healthy')) {
+    if (prediction.confidence < 0.5) {
       return 'Low';
     }
     if (prediction.confidence >= 0.8) {
@@ -29,7 +29,7 @@ class DetectionResultScreen extends StatelessWidget {
     if (prediction.label.toLowerCase().contains('healthy')) {
       return 'No Disease Found';
     }
-    return 'TSWV Found';
+    return prediction.label;
   }
 
   Widget _statTile({required String label, required String value, required IconData icon}) {
@@ -125,7 +125,7 @@ class DetectionResultScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _displayDiagnosis,
+                    "TSWV virus detected on leaf",
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 12),

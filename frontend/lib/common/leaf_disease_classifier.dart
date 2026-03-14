@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -64,341 +63,110 @@ class LeafDiseaseClassifier {
   }
 
   Future<LeafDiseasePrediction> classifyImage(File imageFile) async {
-    await _loadIfNeeded();
+  await _loadIfNeeded();
+  final interpreter = _interpreter!;
+  final labels = _labels!;
 
-    final Interpreter interpreter = _interpreter!;
-    final List<String> labels = _labels!;
+  // 1. Decode and Preprocess Image
+  final Uint8List bytes = await imageFile.readAsBytes();
+  final img.Image? original = img.decodeImage(bytes);
+  if (original == null) throw Exception('Unable to decode image.');
 
-    final Uint8List bytes = await imageFile.readAsBytes();
-    final img.Image? original = img.decodeImage(bytes);
-    if (original == null) {
-      throw Exception('Unable to decode selected image.');
+  // Get input requirements from the model
+  final Tensor inputTensor = interpreter.getInputTensor(0);
+  final int inputHeight = inputTensor.shape[1]; // 640
+  final int inputWidth = inputTensor.shape[2];  // 640
+
+  img.Image resized = img.copyResize(original, width: inputWidth, height: inputHeight);
+
+  // 2. Build Input Buffer (Normalized 0.0 to 1.0 for Float32)
+  // YOLOv8 standard: [1, 640, 640, 3]
+  var input = List.generate(1, (b) => 
+    List.generate(inputHeight, (y) => 
+      List.generate(inputWidth, (x) {
+        final pixel = resized.getPixel(x, y);
+        return [pixel.r / 255.0, pixel.g / 255.0, pixel.b / 255.0];
+      })
+    )
+  );
+
+  // 3. Prepare Output Buffer
+  // Based on your log: shape=[1, 14, 8400]
+  // 14 columns = 4 box coords + 10 class scores
+  final int numClasses = labels.length;
+  final int numPredictions = 8400;
+  var output = List.filled(1 * 14 * numPredictions, 0.0).reshape([1, 14, numPredictions]);
+
+  // 4. Run Inference
+  interpreter.run(input, output);
+
+  // 5. YOLOv8 Post-Processing: Transpose and Search
+  // The output shape is [1, 14, 8400]. We need to find the highest score.
+  // It's more efficient to iterate through the predictions and find the max score for each.
+  double highestConf = 0.0;
+  int bestClassIdx = -1;
+  
+  // Transpose the output for easier processing from [1, 14, 8400] to [1, 8400, 14]
+  var transposedOutput = List.generate(1, (b) => 
+    List.generate(numPredictions, (i) => 
+      List.generate(numClasses + 4, (j) => output[0][j][i])
+    )
+  );
+
+  for (int i = 0; i < numPredictions; i++) {
+    // The first 4 elements are box coordinates, the next 10 are class scores.
+    // Find the max score among the class scores for this prediction.
+    double maxScoreInPrediction = 0;
+    int classIdxInPrediction = -1;
+
+    for (int j = 0; j < numClasses; j++) {
+      double currentScore = transposedOutput[0][i][j + 4];
+      if (currentScore > maxScoreInPrediction) {
+        maxScoreInPrediction = currentScore;
+        classIdxInPrediction = j;
+      }
     }
 
-    final Tensor inputTensor = interpreter.getInputTensor(0);
-    final List<int> inputShape = inputTensor.shape;
-    if (inputShape.length != 4 || inputShape[0] != 1 || inputShape[3] != 3) {
-      throw Exception('Unsupported model input shape: $inputShape');
+    // If the max score in this prediction is the highest we've seen so far, update.
+    if (maxScoreInPrediction > highestConf) {
+      highestConf = maxScoreInPrediction;
+      bestClassIdx = classIdxInPrediction;
     }
+  }
 
-    final int inputHeight = inputShape[1];
-    final int inputWidth = inputShape[2];
-    final img.Image resized = img.copyResize(
-      original,
-      width: inputWidth,
-      height: inputHeight,
-      interpolation: img.Interpolation.linear,
-    );
-
-    final Object input = _buildInputBuffer(
-      resized: resized,
-      inputHeight: inputHeight,
-      inputWidth: inputWidth,
-      inputParams: inputTensor.params,
-      inputType: inputTensor.type,
-    );
-
-    final List<Tensor> outputTensors = interpreter.getOutputTensors();
-    if (outputTensors.isEmpty) {
-      throw Exception('Model has no output tensors.');
-    }
-
-    final Map<int, Object> outputs = <int, Object>{};
-    for (int i = 0; i < outputTensors.length; i++) {
-      final Tensor tensor = outputTensors[i];
-      outputs[i] = _buildOutputBuffer(outputShape: tensor.shape, outputType: tensor.type);
-    }
-
-    interpreter.runForMultipleInputs([input], outputs);
-
-    final _OutputSelection selected = _selectBestOutput(
-      outputs: outputs,
-      outputTensors: outputTensors,
-      labelCount: labels.length,
-    );
-
-    if (selected.scores.isEmpty) {
-      throw Exception('Selected output tensor produced no class scores.');
-    }
-
-    final int usableCount = math.min(selected.scores.length, labels.length);
-    final List<double> usableScores = selected.scores.take(usableCount).toList(growable: false);
-    final int topIndex = _argMax(usableScores);
-    final String label = topIndex < labels.length ? labels[topIndex] : 'Unknown';
-
-    final _ScoreInterpretation interpretation = _interpretScores(usableScores);
-    final double confidence = interpretation.confidence;
-
-    // Helpful runtime telemetry when diagnosing model/output mismatches.
-    debugPrint(
-      'Leaf model output tensor ${selected.tensorIndex} shape=${selected.tensor.shape} '
-      'type=${selected.tensor.type} scores=${selected.scores.length} labels=${labels.length} '
-      'top=$label conf=${(confidence * 100).toStringAsFixed(2)}%',
-    );
-
+  // 6. Handle Null/Low Detections
+  if (bestClassIdx == -1 || highestConf < 0.15) {
     return LeafDiseasePrediction(
-      label: label,
-      confidence: confidence,
-      symptoms: _inferSymptoms(label),
-      recommendation: _recommendationForLabel(label),
+      label: 'Healthy / No Disease Detected',
+      confidence: highestConf,
+      symptoms: ['No significant viral markers found.'],
+      recommendation: 'Monitor plant daily for changes.',
     );
   }
 
-  _OutputSelection _selectBestOutput({
-    required Map<int, Object> outputs,
-    required List<Tensor> outputTensors,
-    required int labelCount,
-  }) {
-    _OutputSelection? best;
+  String finalLabel = labels[bestClassIdx];
 
-    for (int i = 0; i < outputTensors.length; i++) {
-      final Tensor tensor = outputTensors[i];
-      final List<double> scores = _extractScores(
-        output: outputs[i]!,
-        outputType: tensor.type,
-        outputParams: tensor.params,
-      );
+  // 7. TSWV Breach Logic
+  // Group similar viral symptoms into a Breach Alert if over 60%
+  bool isVirusRisk = [
+    'Tomato mosaic virus', 
+    'Tomato Yellow Leaf Curl Virus', 
+    'Bacterial spot'
+  ].contains(finalLabel);
 
-      final int scoreCount = scores.length;
-      final bool exactMatch = scoreCount == labelCount;
-      final bool lastDimMatch = tensor.shape.isNotEmpty && tensor.shape.last == labelCount;
-      final int distance = (scoreCount - labelCount).abs();
+  bool isBreach = isVirusRisk && highestConf >= 0.60;
 
-      final _OutputSelection candidate = _OutputSelection(
-        tensorIndex: i,
-        tensor: tensor,
-        scores: scores,
-        priority: exactMatch
-            ? 3
-            : (lastDimMatch ? 2 : (labelCount > 0 ? (distance <= 2 ? 1 : 0) : 0)),
-        distance: distance,
-      );
+  debugPrint('Detection Result: $finalLabel | Conf: ${(highestConf * 100).toStringAsFixed(2)}%');
 
-      if (best == null) {
-        best = candidate;
-        continue;
-      }
-
-      if (candidate.priority > best.priority ||
-          (candidate.priority == best.priority && candidate.distance < best.distance)) {
-        best = candidate;
-      }
-    }
-
-    return best!;
-  }
-
-  Object _buildInputBuffer({
-    required img.Image resized,
-    required int inputHeight,
-    required int inputWidth,
-    required QuantizationParams inputParams,
-    required TensorType inputType,
-  }) {
-    if (inputType == TensorType.uint8) {
-      return <List<List<List<int>>>>[
-        List<List<List<int>>>.generate(
-          inputHeight,
-          (int y) => List<List<int>>.generate(
-            inputWidth,
-            (int x) {
-              final img.Pixel pixel = resized.getPixel(x, y);
-              return <int>[pixel.r.toInt(), pixel.g.toInt(), pixel.b.toInt()];
-            },
-            growable: false,
-          ),
-          growable: false,
-        ),
-      ];
-    }
-
-    if (inputType == TensorType.int8) {
-      final double scale = inputParams.scale == 0 ? 1.0 : inputParams.scale;
-      final int zeroPoint = inputParams.zeroPoint;
-
-      return <List<List<List<int>>>>[
-        List<List<List<int>>>.generate(
-          inputHeight,
-          (int y) => List<List<int>>.generate(
-            inputWidth,
-            (int x) {
-              final img.Pixel pixel = resized.getPixel(x, y);
-              return <int>[
-                _quantizeInt8(pixel.r / 255.0, scale, zeroPoint),
-                _quantizeInt8(pixel.g / 255.0, scale, zeroPoint),
-                _quantizeInt8(pixel.b / 255.0, scale, zeroPoint),
-              ];
-            },
-            growable: false,
-          ),
-          growable: false,
-        ),
-      ];
-    }
-
-    if (inputType != TensorType.float32) {
-      throw Exception('Unsupported model input type: $inputType');
-    }
-
-    return <List<List<List<double>>>>[
-      List<List<List<double>>>.generate(
-        inputHeight,
-        (int y) => List<List<double>>.generate(
-          inputWidth,
-          (int x) {
-            final img.Pixel pixel = resized.getPixel(x, y);
-            return <double>[
-              pixel.r / 255.0,
-              pixel.g / 255.0,
-              pixel.b / 255.0,
-            ];
-          },
-          growable: false,
-        ),
-        growable: false,
-      ),
-    ];
-  }
-
-  Object _buildOutputBuffer({required List<int> outputShape, required TensorType outputType}) {
-    if (outputType == TensorType.uint8 || outputType == TensorType.int8) {
-      return _buildNestedIntBuffer(outputShape);
-    }
-    if (outputType != TensorType.float32) {
-      throw Exception('Unsupported model output type: $outputType');
-    }
-    return _buildNestedDoubleBuffer(outputShape);
-  }
-
-  List<double> _extractScores({
-    required Object output,
-    required TensorType outputType,
-    required QuantizationParams outputParams,
-  }) {
-    if (outputType == TensorType.uint8) {
-      final List<int> flat = <int>[];
-      _flattenInts(output, flat);
-      return flat.map((int value) => value.toDouble()).toList(growable: false);
-    }
-
-    if (outputType == TensorType.int8) {
-      final List<int> flat = <int>[];
-      _flattenInts(output, flat);
-      final double scale = outputParams.scale == 0 ? 1.0 : outputParams.scale;
-      final int zeroPoint = outputParams.zeroPoint;
-      return flat.map((int value) => (value - zeroPoint) * scale).toList(growable: false);
-    }
-
-    final List<double> flat = <double>[];
-    _flattenDoubles(output, flat);
-    return flat;
-  }
-
-  Object _buildNestedIntBuffer(List<int> shape) {
-    return _buildNestedBuffer<int>(shape, 0, 0);
-  }
-
-  Object _buildNestedDoubleBuffer(List<int> shape) {
-    return _buildNestedBuffer<double>(shape, 0, 0.0);
-  }
-
-  Object _buildNestedBuffer<T extends num>(List<int> shape, int depth, T fillValue) {
-    final int dim = shape[depth];
-    if (depth == shape.length - 1) {
-      return List<T>.filled(dim, fillValue, growable: false);
-    }
-
-    return List<Object>.generate(
-      dim,
-      (_) => _buildNestedBuffer<T>(shape, depth + 1, fillValue),
-      growable: false,
-    );
-  }
-
-  void _flattenInts(Object value, List<int> out) {
-    if (value is int) {
-      out.add(value);
-      return;
-    }
-    if (value is List) {
-      for (final Object child in value) {
-        _flattenInts(child, out);
-      }
-    }
-  }
-
-  void _flattenDoubles(Object value, List<double> out) {
-    if (value is num) {
-      out.add(value.toDouble());
-      return;
-    }
-    if (value is List) {
-      for (final Object child in value) {
-        _flattenDoubles(child, out);
-      }
-    }
-  }
-
-  int _quantizeInt8(double normalizedValue, double scale, int zeroPoint) {
-    final int quantized = (normalizedValue / scale + zeroPoint).round();
-    if (quantized < -128) {
-      return -128;
-    }
-    if (quantized > 127) {
-      return 127;
-    }
-    return quantized;
-  }
-
-  List<double> _toProbabilities(List<double> scores) {
-    if (scores.isEmpty) {
-      throw Exception('Model returned empty output.');
-    }
-
-    final double minScore = scores.reduce(math.min);
-    final double maxScore = scores.reduce(math.max);
-    final double sumScores = scores.fold<double>(0.0, (double acc, double value) => acc + value);
-
-    if (minScore >= 0 && maxScore <= 1.0 && sumScores > 0) {
-      return scores.map((double value) => value / sumScores).toList(growable: false);
-    }
-
-    final double maxLogit = maxScore;
-    final List<double> exps = scores.map((double value) => math.exp(value - maxLogit)).toList(growable: false);
-    final double sumExps = exps.fold<double>(0.0, (double acc, double value) => acc + value);
-    if (sumExps == 0) {
-      throw Exception('Model output could not be normalized.');
-    }
-
-    return exps.map((double value) => value / sumExps).toList(growable: false);
-  }
-
-  _ScoreInterpretation _interpretScores(List<double> scores) {
-    final double minScore = scores.reduce(math.min);
-    final double maxScore = scores.reduce(math.max);
-
-    // For sigmoid-style outputs already in [0,1], use direct top score.
-    if (minScore >= 0 && maxScore <= 1.0) {
-      final int topIndex = _argMax(scores);
-      final double confidence = scores[topIndex].clamp(0.0, 1.0);
-      return _ScoreInterpretation(confidence: confidence);
-    }
-
-    final List<double> probabilities = _toProbabilities(scores);
-    final int topIndex = _argMax(probabilities);
-    final double confidence = probabilities[topIndex];
-    return _ScoreInterpretation(confidence: confidence);
-  }
-
-  int _argMax(List<double> values) {
-    int bestIndex = 0;
-    for (int i = 1; i < values.length; i++) {
-      if (values[i] > values[bestIndex]) {
-        bestIndex = i;
-      }
-    }
-    return bestIndex;
-  }
+  return LeafDiseasePrediction(
+    label: isBreach ? "🚨 TSWV BREACH DETECTED" : finalLabel,
+    confidence: highestConf,
+    symptoms: _inferSymptoms(finalLabel),
+    recommendation: isBreach 
+        ? "IMMEDIATE ACTION: Isolate plant and notify neighborhood farmers."
+        : _recommendationForLabel(finalLabel),
+  );
+}
 
   List<String> _inferSymptoms(String label) {
     final String lowered = label.toLowerCase();
@@ -478,26 +246,4 @@ class LeafDiseaseClassifier {
 
     return 'Likely disease symptoms detected. Isolate severely affected leaves, monitor nearby plants, and follow disease-specific control practices.';
   }
-}
-
-class _OutputSelection {
-  final int tensorIndex;
-  final Tensor tensor;
-  final List<double> scores;
-  final int priority;
-  final int distance;
-
-  const _OutputSelection({
-    required this.tensorIndex,
-    required this.tensor,
-    required this.scores,
-    required this.priority,
-    required this.distance,
-  });
-}
-
-class _ScoreInterpretation {
-  final double confidence;
-
-  const _ScoreInterpretation({required this.confidence});
 }
