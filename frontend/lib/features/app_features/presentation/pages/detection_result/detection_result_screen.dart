@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/leaf_disease_classifier.dart';
+import '../../../../../common/detection_state.dart';
 import '../spread_prediction/spread_prediction_screen.dart';
 
 class DetectionResultScreen extends StatelessWidget {
@@ -170,13 +171,19 @@ class DetectionResultScreen extends StatelessWidget {
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: () {
+              if (!DetectionState.thripsDetected) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No thrips detection found yet.')),
+                );
+                return;
+              }
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SpreadPredictionScreen()),
               );
             },
             icon: const Icon(Icons.map_rounded),
             label: const Text(
-              'Predict Spread',
+              'Weather Spread Map',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16.5),
             ),
           ),

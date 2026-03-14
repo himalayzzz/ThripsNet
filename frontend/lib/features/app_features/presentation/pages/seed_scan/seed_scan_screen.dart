@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../../common/app_theme.dart';
 import '../../../../../common/leaf_disease_classifier.dart';
+import '../../../../../common/detection_state.dart';
 import '../detection_result/detection_result_screen.dart';
 
 class SeedScanScreen extends StatefulWidget {
@@ -109,6 +110,7 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
     }
 
     Navigator.of(context).pop();
+    DetectionState.thripsDetected = true;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const DetectionResultScreen(

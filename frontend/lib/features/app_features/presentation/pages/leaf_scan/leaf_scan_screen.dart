@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../../common/leaf_disease_classifier.dart';
 import '../../../../../common/app_theme.dart';
+import '../../../../../common/detection_state.dart';
 import '../detection_result/detection_result_screen.dart';
 
 class LeafScanScreen extends StatefulWidget {
@@ -115,6 +116,9 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
       }
 
       Navigator.of(context).pop();
+      final lowerLabel = prediction.label.toLowerCase();
+      final hasDisease = !lowerLabel.contains('healthy');
+      DetectionState.thripsDetected = hasDisease;
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => DetectionResultScreen(

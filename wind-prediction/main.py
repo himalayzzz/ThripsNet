@@ -1,6 +1,5 @@
 from wind_service import get_wind_data
 from drift_model import predict_spread_cone
-from map_visualization import generate_map
 
 
 def predict_thrips_spread(lat, lon):
@@ -14,18 +13,11 @@ def predict_thrips_spread(lat, lon):
         direction
     )
 
-    map_file = generate_map(
-        lat,
-        lon,
-        spread_points
-    )
-
     return {
         "origin": [lat, lon],
         "wind_speed": speed,
         "wind_direction": direction,
-        "predicted_spread": spread_points,
-        "map": map_file
+        "predicted_spread": spread_points
     }
 
 
