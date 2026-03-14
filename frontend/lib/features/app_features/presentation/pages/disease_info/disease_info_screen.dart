@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../common/app_theme.dart';
+import '../../../../../common/app_theme.dart';
 import '../../../../../common/app_tts_service.dart';
 
 class DiseaseInfoScreen extends StatefulWidget {

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../../common/leaf_disease_classifier.dart';
 import '../../../../../common/app_theme.dart';
 import '../detection_result/detection_result_screen.dart';
 
@@ -16,6 +17,7 @@ class LeafScanScreen extends StatefulWidget {
 
 class _LeafScanScreenState extends State<LeafScanScreen> {
   final ImagePicker _picker = ImagePicker();
+  final LeafDiseaseClassifier _classifier = LeafDiseaseClassifier.instance;
   String? _selectedSource;
   String? _selectedInput;
   XFile? _selectedImage;
@@ -83,16 +85,20 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
   }
 
   Future<void> _runDetection() async {
+    if (_selectedImage == null) {
+      return;
+    }
+
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) {
         return AlertDialog(
           title: const Text('Processing'),
-          content: const Column(
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: const [
               Text('Analyzing leaf image...'),
               SizedBox(height: 8),
               Text('Running AI model...'),
@@ -102,15 +108,34 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
       },
     );
 
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (!mounted) {
-      return;
-    }
+    try {
+      final LeafDiseasePrediction prediction = await _classifier.classifyImage(File(_selectedImage!.path));
+      if (!mounted) {
+        return;
+      }
 
-    Navigator.of(context).pop();
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DetectionResultScreen()),
-    );
+      Navigator.of(context).pop();
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => DetectionResultScreen(
+            prediction: prediction,
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Leaf model evaluation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Model evaluation failed: $error'),
+        ),
+      );
+    }
   }
 
   @override
