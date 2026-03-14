@@ -5,17 +5,15 @@ allprojects {
     }
 }
 
-val safeBuildRoot = File(
-    System.getenv("LOCALAPPDATA") ?: "C:/Temp",
-    "ThripsNetBuild",
-)
-rootProject.buildDir = safeBuildRoot
+val newBuildDir = rootProject.layout.buildDirectory.dir("../../build").get()
+rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
-    project.buildDir = File(safeBuildRoot, project.name)
+    val newSubprojectBuildDir = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
     project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
-    delete(safeBuildRoot)
+    delete(rootProject.layout.buildDirectory)
 }

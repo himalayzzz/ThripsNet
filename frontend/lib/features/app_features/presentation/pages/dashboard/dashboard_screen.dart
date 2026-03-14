@@ -1,12 +1,105 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../../../common/app_theme.dart';
+import '../../../../../common/detection_state.dart';
 import '../disease_info/disease_info_screen.dart';
 import '../leaf_scan/leaf_scan_screen.dart';
 import '../seed_scan/seed_scan_screen.dart';
+import '../spread_prediction/spread_prediction_screen.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  String _location = 'Idukki';
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshLocation();
+  }
+
+  Future<void> _refreshLocation() async {
+    try {
+      final bool enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final Position position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      final Uri uri = Uri.parse(
+        'https://geocoding-api.open-meteo.com/v1/reverse?latitude=${position.latitude}&longitude=${position.longitude}&count=1&language=en&format=json',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        return;
+      }
+
+      final Map<String, dynamic> body = jsonDecode(response.body) as Map<String, dynamic>;
+      final List<dynamic>? results = body['results'] as List<dynamic>?;
+      if (results == null || results.isEmpty) {
+        return;
+      }
+
+      final Map<String, dynamic> first = results.first as Map<String, dynamic>;
+      final String? city = (first['name'] as String?)?.trim();
+      final String? admin = (first['admin1'] as String?)?.trim();
+      final String resolved = (city != null && city.isNotEmpty)
+          ? city
+          : ((admin != null && admin.isNotEmpty)
+                ? admin
+                : '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}');
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _location = resolved;
+      });
+    } catch (_) {
+      // Keep default location when permission/network fails.
+    }
+  }
+
+  Future<void> _openWeatherFlow(BuildContext context) async {
+    if (!DetectionState.thripsDetected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Run detection first, then open Weather map.'),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SpreadPredictionScreen()),
+    );
+    if (!mounted) {
+      return;
+    }
+    _refreshLocation();
+  }
 
   Widget _infoPill(String text) {
     return Container(
@@ -160,9 +253,9 @@ class DashboardScreen extends StatelessWidget {
                       ?.copyWith(color: const Color(0xFFF3FFF9), fontSize: 16.5, height: 1.35),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  'Location: Idukki',
-                  style: TextStyle(
+                Text(
+                  'Location: $_location',
+                  style: const TextStyle(
                     color: Color(0xFFF3FFF9),
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
@@ -214,7 +307,7 @@ class DashboardScreen extends StatelessWidget {
             mainAxisSpacing: 10,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            childAspectRatio: 0.98,
+            childAspectRatio: 0.9,
             children: [
               _actionTile(
                 context: context,
@@ -250,41 +343,55 @@ class DashboardScreen extends StatelessWidget {
               Card(
                 margin: EdgeInsets.zero,
                 color: AppColors.white,
-                child: Padding(
-                  padding: EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.softYellow,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Text(
-                          'WEATHER',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11,
-                            color: AppColors.textPrimary,
-                            letterSpacing: 0.4,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    _openWeatherFlow(context);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.softYellow,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            'WEATHER',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              color: AppColors.textPrimary,
+                              letterSpacing: 0.4,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Weather',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                          color: AppColors.textPrimary,
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Weather',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text('Wind: North-East', style: TextStyle(fontSize: 14.5, height: 1.25)),
-                      const Text('Temp: 29 C', style: TextStyle(fontSize: 14.5, height: 1.25)),
-                      const Text('Humidity: 71%', style: TextStyle(fontSize: 14.5, height: 1.25)),
-                    ],
+                        const SizedBox(height: 6),
+                        const Text('Wind: tap to fetch live', style: TextStyle(fontSize: 14.5, height: 1.25)),
+                        const Text('Shows next 5 spots', style: TextStyle(fontSize: 14.5, height: 1.25)),
+                        const Spacer(),
+                        const Text(
+                          'Open',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: AppColors.blue,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
