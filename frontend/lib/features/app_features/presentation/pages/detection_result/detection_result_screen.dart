@@ -1,10 +1,36 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../common/app_theme.dart';
+import '../../../../../common/leaf_disease_classifier.dart';
 import '../spread_prediction/spread_prediction_screen.dart';
 
 class DetectionResultScreen extends StatelessWidget {
-  const DetectionResultScreen({super.key});
+  final LeafDiseasePrediction prediction;
+
+  const DetectionResultScreen({
+    super.key,
+    required this.prediction,
+  });
+
+  String get _riskLevel {
+    if (prediction.label.toLowerCase().contains('healthy')) {
+      return 'Low';
+    }
+    if (prediction.confidence >= 0.8) {
+      return 'High';
+    }
+    if (prediction.confidence >= 0.6) {
+      return 'Moderate';
+    }
+    return 'Needs manual verification';
+  }
+
+  String get _displayDiagnosis {
+    if (prediction.label.toLowerCase().contains('healthy')) {
+      return 'No Disease Found';
+    }
+    return 'TSWV Found';
+  }
 
   Widget _statTile({required String label, required String value, required IconData icon}) {
     return Container(
@@ -94,32 +120,37 @@ class DetectionResultScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Tomato Spotted Wilt Virus',
+                    'Model Prediction',
                     style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _displayDiagnosis,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 12),
                   LinearProgressIndicator(
-                    value: 0.92,
+                    value: prediction.confidence,
                     minHeight: 10,
                     borderRadius: BorderRadius.circular(999),
                     backgroundColor: AppColors.white,
                     valueColor: const AlwaysStoppedAnimation<Color>(AppColors.green),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Confidence: 92%',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                  Text(
+                    'Confidence: ${(prediction.confidence * 100).toStringAsFixed(1)}%',
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 12),
                   _statTile(
-                    label: 'Detected Pattern',
-                    value: 'Necrotic Ring Spots',
+                    label: 'Detected Symptoms',
+                    value: prediction.symptoms.join(' | '),
                     icon: Icons.visibility_rounded,
                   ),
                   const SizedBox(height: 10),
                   _statTile(
                     label: 'Risk Level',
-                    value: 'High, immediate intervention advised',
+                    value: _riskLevel,
                     icon: Icons.warning_amber_rounded,
                   ),
                 ],
@@ -127,12 +158,12 @@ class DetectionResultScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Text(
-                'Recommendation: Start preventive action immediately in nearby rows to reduce spread risk.',
-                style: TextStyle(fontWeight: FontWeight.w600, height: 1.4),
+                'Recommendation: ${prediction.recommendation}',
+                style: const TextStyle(fontWeight: FontWeight.w600, height: 1.4),
               ),
             ),
           ),

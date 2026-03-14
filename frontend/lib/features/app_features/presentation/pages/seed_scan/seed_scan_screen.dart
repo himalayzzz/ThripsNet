@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../../common/app_theme.dart';
+import '../../../../../common/leaf_disease_classifier.dart';
 import '../detection_result/detection_result_screen.dart';
 
 class SeedScanScreen extends StatefulWidget {
@@ -109,7 +110,16 @@ class _SeedScanScreenState extends State<SeedScanScreen> {
 
     Navigator.of(context).pop();
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DetectionResultScreen()),
+      MaterialPageRoute(
+        builder: (_) => const DetectionResultScreen(
+          prediction: LeafDiseasePrediction(
+            label: 'Seed quality model not configured',
+            confidence: 0.0,
+            symptoms: <String>['No seed classifier configured for this flow yet.'],
+            recommendation: 'Connect a dedicated seed model for accurate seed condition predictions.',
+          ),
+        ),
+      ),
     );
   }
 
