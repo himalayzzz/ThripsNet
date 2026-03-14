@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../../../../../common/app_theme.dart';
+import '../../../../../common/wind_spread_calculator.dart';
+import '../../../../../services/wind_spread_notification_manager.dart';
 import '../alert_notification/alert_notification_screen.dart';
 
 class SpreadPredictionScreen extends StatefulWidget {
@@ -24,11 +26,25 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
   List<LatLng> _predictedPoints = const [];
   double _windSpeed = 0;
   double _windDirection = 0;
+  bool _notificationsActive = false;
 
   @override
   void initState() {
     super.initState();
     _loadPrediction();
+    _updateNotificationStatus();
+  }
+
+  @override
+  void dispose() {
+    // Note: We don't stop notifications on dispose - let user control that
+    super.dispose();
+  }
+
+  void _updateNotificationStatus() {
+    setState(() {
+      _notificationsActive = WindSpreadNotificationManager.isRunning;
+    });
   }
 
   Future<void> _loadPrediction() async {
@@ -39,10 +55,13 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
 
     try {
       final position = await _requestCurrentLocation();
-      final wind = await _fetchWind(position.latitude, position.longitude);
+      final wind = await WindSpreadCalculator.fetchWind(
+        position.latitude,
+        position.longitude,
+      );
 
       final origin = LatLng(position.latitude, position.longitude);
-      final points = _predictSpreadPoints(
+      final points = WindSpreadCalculator.predictSpreadPoints(
         origin: origin,
         windSpeedMps: wind.speed,
         windDirectionDeg: wind.direction,
@@ -73,7 +92,9 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
   Future<Position> _requestCurrentLocation() async {
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
-      throw Exception('Location services are disabled. Enable GPS and try again.');
+      throw Exception(
+        'Location services are disabled. Enable GPS and try again.',
+      );
     }
 
     var permission = await Geolocator.checkPermission();
@@ -81,8 +102,11 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
       permission = await Geolocator.requestPermission();
     }
 
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      throw Exception('Location permission denied. Please allow location access.');
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception(
+        'Location permission denied. Please allow location access.',
+      );
     }
 
     return Geolocator.getCurrentPosition(
@@ -90,63 +114,43 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
     );
   }
 
-  Future<_WindData> _fetchWind(double lat, double lon) async {
-    final uri = Uri.parse(
-      'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=wind_speed_10m,wind_direction_10m&timezone=auto',
-    );
-
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      throw Exception('Unable to fetch weather data (${response.statusCode}).');
-    }
-
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final current = body['current'] as Map<String, dynamic>?;
-    if (current == null) {
-      throw Exception('Weather data not available for this location.');
-    }
-
-    final speedKmh = (current['wind_speed_10m'] as num?)?.toDouble();
-    final directionDeg = (current['wind_direction_10m'] as num?)?.toDouble();
-    if (speedKmh == null || directionDeg == null) {
-      throw Exception('Incomplete wind information received.');
-    }
-
-    return _WindData(speed: speedKmh / 3.6, direction: directionDeg);
-  }
-
-  List<LatLng> _predictSpreadPoints({
-    required LatLng origin,
-    required double windSpeedMps,
-    required double windDirectionDeg,
-  }) {
-    final distanceInMeters = windSpeedMps * 500;
-    const offsets = [-20.0, -10.0, 0.0, 10.0, 20.0];
-
-    return offsets
-        .map((offset) => _offsetPoint(origin, distanceInMeters, windDirectionDeg + offset))
-        .toList();
-  }
-
-  LatLng _offsetPoint(LatLng start, double distanceMeters, double bearingDegrees) {
-    const earthRadius = 6371000.0;
-    final bearing = bearingDegrees * pi / 180;
-    final lat1 = start.latitude * pi / 180;
-    final lon1 = start.longitude * pi / 180;
-    final angularDistance = distanceMeters / earthRadius;
-
-    final lat2 = asin(
-      sin(lat1) * cos(angularDistance) +
-          cos(lat1) * sin(angularDistance) * cos(bearing),
-    );
-
-    final lon2 = lon1 +
-        atan2(
-          sin(bearing) * sin(angularDistance) * cos(lat1),
-          cos(angularDistance) - sin(lat1) * sin(lat2),
+  Future<void> _toggleNotifications() async {
+    try {
+      if (_notificationsActive) {
+        await WindSpreadNotificationManager.stop();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Wind spread notifications stopped'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        await WindSpreadNotificationManager.start();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Wind spread notifications started (every 10 seconds)',
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+      _updateNotificationStatus();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
-
-    return LatLng(lat2 * 180 / pi, lon2 * 180 / pi);
+      }
+    }
   }
 
   String _directionLabel(double degrees) {
@@ -170,7 +174,10 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
         ),
       ],
@@ -190,6 +197,54 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
         title: const Text(
           'Spread Prediction',
           style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800),
+        ),
+        actions: [
+          // Notification status indicator
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _notificationsActive
+                    ? Colors.green.shade100
+                    : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _notificationsActive
+                        ? Icons.notifications_active
+                        : Icons.notifications_off,
+                    size: 16,
+                    color: _notificationsActive
+                        ? Colors.green.shade700
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _notificationsActive ? 'Active' : 'Paused',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _notificationsActive
+                          ? Colors.green.shade700
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _toggleNotifications,
+        backgroundColor: _notificationsActive ? Colors.orange : AppColors.blue,
+        child: Icon(
+          _notificationsActive ? Icons.notifications_off : Icons.notifications_active,
+          color: Colors.white,
         ),
       ),
       body: ListView(
@@ -217,12 +272,21 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
               children: [
                 Text(
                   'AI Spread Forecast',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 25),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 25,
+                  ),
                 ),
                 SizedBox(height: 8),
                 Text(
                   'Prediction combines detected infection point and wind flow to estimate nearby risk zones.',
-                  style: TextStyle(color: Color(0xFFF0FFFB), fontWeight: FontWeight.w600, fontSize: 15.5, height: 1.35),
+                  style: TextStyle(
+                    color: Color(0xFFF0FFFB),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15.5,
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
@@ -243,73 +307,81 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                       child: _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : _error != null
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
                                   ),
-                                )
-                              : FlutterMap(
-                                  options: MapOptions(
-                                    initialCenter: origin ?? const LatLng(12.9716, 77.5946),
-                                    initialZoom: 11.5,
-                                  ),
-                                  children: [
-                                    TileLayer(
-                                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                      userAgentPackageName: 'com.example.frontend',
-                                    ),
-                                    PolylineLayer(
-                                      polylines: [
-                                        Polyline(
-                                          points: mapPoints,
-                                          strokeWidth: 3,
-                                          color: AppColors.blue,
-                                        ),
-                                      ],
-                                    ),
-                                    MarkerLayer(
-                                      markers: [
-                                        if (origin != null)
-                                          Marker(
-                                            point: origin,
-                                            width: 38,
-                                            height: 38,
-                                            child: const Icon(
-                                              Icons.place,
-                                              color: Color(0xFFD9493F),
-                                              size: 34,
-                                            ),
-                                          ),
-                                        ..._predictedPoints.map(
-                                          (point) => Marker(
-                                            point: point,
-                                            width: 30,
-                                            height: 30,
-                                            child: const Icon(
-                                              Icons.location_on,
-                                              color: Color(0xFFE6952B),
-                                              size: 24,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                ),
+                              ),
+                            )
+                          : FlutterMap(
+                              options: MapOptions(
+                                initialCenter:
+                                    origin ?? const LatLng(12.9716, 77.5946),
+                                initialZoom: 11.5,
+                              ),
+                              children: [
+                                TileLayer(
+                                  urlTemplate:
+                                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.example.frontend',
+                                ),
+                                PolylineLayer(
+                                  polylines: [
+                                    Polyline(
+                                      points: mapPoints,
+                                      strokeWidth: 3,
+                                      color: AppColors.blue,
                                     ),
                                   ],
                                 ),
+                                MarkerLayer(
+                                  markers: [
+                                    if (origin != null)
+                                      Marker(
+                                        point: origin,
+                                        width: 38,
+                                        height: 38,
+                                        child: const Icon(
+                                          Icons.place,
+                                          color: Color(0xFFD9493F),
+                                          size: 34,
+                                        ),
+                                      ),
+                                    ..._predictedPoints.map(
+                                      (point) => Marker(
+                                        point: point,
+                                        width: 30,
+                                        height: 30,
+                                        child: const Icon(
+                                          Icons.location_on,
+                                          color: Color(0xFFE6952B),
+                                          size: 24,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _legendItem(color: Color(0xFFD9493F), text: 'Detection location (origin)'),
+                  _legendItem(
+                    color: Color(0xFFD9493F),
+                    text: 'Detection location (origin)',
+                  ),
                   const SizedBox(height: 6),
-                  _legendItem(color: Color(0xFFE6952B), text: 'Next 5 likely wind spread spots'),
+                  _legendItem(
+                    color: Color(0xFFE6952B),
+                    text: 'Next 5 likely wind spread spots',
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     FilledButton.tonalIcon(
@@ -332,11 +404,23 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Wind Direction', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textMuted)),
+                        const Text(
+                          'Wind Direction',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                          _isLoading ? 'Loading...' : '${_directionLabel(_windDirection)} (${_windDirection.toStringAsFixed(0)} deg)',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textPrimary, fontSize: 17),
+                          _isLoading
+                              ? 'Loading...'
+                              : '${_directionLabel(_windDirection)} (${_windDirection.toStringAsFixed(0)} deg)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            fontSize: 17,
+                          ),
                         ),
                       ],
                     ),
@@ -351,11 +435,23 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Wind Speed', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textMuted)),
+                        const Text(
+                          'Wind Speed',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                          _isLoading ? 'Loading...' : '${(_windSpeed * 3.6).toStringAsFixed(1)} km/h',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.textPrimary, fontSize: 17),
+                          _isLoading
+                              ? 'Loading...'
+                              : '${(_windSpeed * 3.6).toStringAsFixed(1)} km/h',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            fontSize: 17,
+                          ),
                         ),
                       ],
                     ),
@@ -378,7 +474,9 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
           FilledButton.icon(
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AlertNotificationScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const AlertNotificationScreen(),
+                ),
               );
             },
             icon: const Icon(Icons.notification_add_rounded),
@@ -391,11 +489,4 @@ class _SpreadPredictionScreenState extends State<SpreadPredictionScreen> {
       ),
     );
   }
-}
-
-class _WindData {
-  const _WindData({required this.speed, required this.direction});
-
-  final double speed;
-  final double direction;
 }
