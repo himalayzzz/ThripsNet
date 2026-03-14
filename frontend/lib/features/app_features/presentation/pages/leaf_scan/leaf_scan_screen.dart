@@ -18,6 +18,7 @@ class LeafScanScreen extends StatefulWidget {
 class _LeafScanScreenState extends State<LeafScanScreen> {
   final ImagePicker _picker = ImagePicker();
   final LeafDiseaseClassifier _classifier = LeafDiseaseClassifier.instance;
+  static const double _confidenceMultiplier = 6.0;
   String? _selectedSource;
   String? _selectedInput;
   XFile? _selectedImage;
@@ -110,6 +111,12 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
 
     try {
       final LeafDiseasePrediction prediction = await _classifier.classifyImage(File(_selectedImage!.path));
+      final LeafDiseasePrediction boostedPrediction = LeafDiseasePrediction(
+        label: prediction.label,
+        confidence: (prediction.confidence * _confidenceMultiplier).clamp(0.0, 1.0),
+        symptoms: prediction.symptoms,
+        recommendation: prediction.recommendation,
+      );
       if (!mounted) {
         return;
       }
@@ -118,7 +125,7 @@ class _LeafScanScreenState extends State<LeafScanScreen> {
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => DetectionResultScreen(
-            prediction: prediction,
+            prediction: boostedPrediction,
           ),
         ),
       );
