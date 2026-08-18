@@ -1,16 +1,26 @@
-# frontend
+# Frontend — mobile app (Flutter)
 
-A new Flutter project.
+Purpose
+-------
+The frontend is a Flutter mobile application used by farmers to capture leaf photos, confirm seed variety, view local risk heatmaps and receive alerts.
 
-## Getting Started
+Local development
+-----------------
+Prereqs: Flutter SDK, Android Studio / VS Code.
 
-This project is a starting point for a Flutter application.
+Run on an Android device/emulator:
 
-A few resources to get you started if this is your first Flutter project:
+```powershell
+flutter pub get
+flutter run
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Notes for model integration
+---------------------------
+- On-device inference uses TensorFlow Lite models stored in `assets/` (`tswv_best_model.tflite`).
+- For end-to-end testing, point the app to a local `backend/` instance (see `backend/README.md`).
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Testing & localization
+----------------------
+- The app supports multiple languages — update locale resources under `lib/` and `assets/`.
+- Add widget tests under `test/` and run them with `flutter test`.

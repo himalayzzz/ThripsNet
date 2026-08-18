@@ -1,58 +1,33 @@
-# ThripsNet - AI Disease Detection System
+# ThripsNet — Early detection and community alerts for TSWV
 
-A comprehensive system for detecting thrips and other crop diseases using AI and weather prediction.
+Short description
+-----------------
+ThripsNet detects Tomato Spotted Wilt Virus (TSWV) from farmer-submitted leaf photos, flags potential resistance-breaking infections using seed variety metadata, and predicts short-term thrips-driven spread using weather data. The repository is organized by responsibility: mobile frontend, backend services, model code, datasets, forecasting, notifications and demo assets.
 
-## Project Structure
+Repository layout
+-----------------
+- `frontend/` — Mobile application (Flutter) that captures images, runs on-device inference, and displays risk heatmaps and alerts.
+- `backend/` — API and aggregation services: handles advanced inference, report ingestion, heatmap generation and alert orchestration.
+- `ai-model/` — Model training, evaluation and exported artifacts (SavedModel / TFLite). See `ai-model/README.md` for details.
+- `dataset/` — Guidelines and manifests for datasets used to train detection models.
+- `wind-prediction/` — Weather ingestion and migration/prediction logic producing short-term risk forecasts.
+- `notifications/` — Notification integrations (FCM, Twilio/WhatsApp, SMS) and event schema.
+- `demo-assets/` — Presentation media, sample images and short video clips for demos.
 
-```
-thripsnet/
-├── frontend/              # Mobile app UI (React Native / Flutter / etc.)
-├── backend/               # API server (REST/GraphQL endpoints)
-├── ai-model/              # Disease detection model (TensorFlow/PyTorch)
-├── dataset/               # Training images and labeled data
-├── wind-prediction/       # Wind pattern analysis and prediction logic
-├── notifications/         # Alert and notification system
-├── demo-assets/           # Images and videos for demo/presentation
-└── README.md              # This file
-```
+Quick start
+-----------
+1. Pick the module you want to work on (see folders above).
+2. Follow that module's README for setup and run instructions — each module contains targeted developer notes.
+3. For model work, start in `ai-model/`; for integration tests, start `backend/` + `frontend/`.
 
-## Directory Descriptions
+How we work
+-----------
+- Each module owns its own README and setup instructions.
+- Models must include provenance: training dataset version, code commit, and export format.
+- All changes that affect the API contract must add/update `backend/` API docs and notify frontend/mobile teams.
 
-### `/frontend`
-Mobile and web application user interface. Contains all UI components, screens, and client-side logic.
+Contact & contributions
+-----------------------
+Open issues for bugs, new features or integration questions. Maintain clear PR descriptions and reference the module(s) affected.
 
-### `/backend`
-API server implementation. Handles requests, database operations, and business logic.
-
-### `/ai-model`
-Machine learning model for disease detection. Includes model training scripts, inference code, and model weights.
-
-### `/dataset`
-Training dataset with images and annotations for the AI model. Keep organized with clear labeling.
-
-### `/wind-prediction`
-Wind pattern analysis module. Predicts wind conditions for disease spread forecasting.
-
-### `/notifications`
-Alert and notification system for user notifications about detected diseases or risks.
-
-### `/demo-assets`
-Media files (screenshots, videos, demo images) used for presentations and documentation.
-
-## Getting Started
-
-1. Clone or set up the repository
-2. Navigate to the relevant module folder for your work
-3. Follow the setup instructions in each module's local documentation
-4. Refer to this structure when discussing features with team members
-
-## Team Guidelines
-
-- **Code Organization**: Each folder should have its own README with specific setup and contribution guidelines
-- **Dependencies**: Document external dependencies in each module
-- **Communication**: Reference folder names when discussing features
-- **Collaboration**: Ensure your work stays within your module's scope or coordinate with other teams
-
----
-
-**Last Updated**: March 13, 2026
+Last updated: 2026-08-19
